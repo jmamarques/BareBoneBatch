@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.UserMapper">
+    <!-- CUD operations on the target_users table -->
+    <insert id="insertUser">
+        INSERT INTO target_users (id, name, age)
+        VALUES (#{user.id}, #{user.name}, #{user.age})
+    </insert>
+
+    <update id="updateUser">
+        UPDATE target_users
+        SET name = #{user.name}, age = #{user.age}
+        WHERE id = #{user.id}
+    </update>
+
+    <delete id="deleteUser">
+        DELETE FROM target_users WHERE id = #{user.id}
+    </delete>
+
+    <!-- Query to check for a file identifier in the import-work table -->
+    <select id="findWorkByFileId" resultType="String">
+        SELECT job_class FROM import_work WHERE file_identifier = #{fileId}
+    </select>
+
+    <!-- Logging job execution in the import_job table -->
+    <insert id="insertJobRun">
+        INSERT INTO import_job (
+            job_id, job_name, status, start_time, end_time, exit_message
+        ) VALUES (
+                     #{id}, #{jobName}, #{status}, #{startTime}, #{endTime}, #{exitMessage}
+                 )
+    </insert>
+
+    <update id="updateJobRun">
+        UPDATE import_job
+        SET
+            status = #{status},
+            end_time = #{endTime},
+            exit_message = #{exitMessage}
+        WHERE job_id = #{id}
+    </update>
+
+</mapper>
