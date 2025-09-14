@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.barebonebatch.common.dao.JobDao">
+    <resultMap id="WorkStatusResultMap" type="com.barebonebatch.common.domain.WorkStatus">
+        <id property="id" column="WST_IDEN" />
+        <result property="workIden" column="WST_WORK_IDEN" />
+        <result property="fileIden" column="WST_FILE_IDEN" />
+        <result property="statusCode" column="WST_STAT_CODE" />
+        <result property="creationDate" column="WST_CREA_DATE" />
+        <result property="beginDate" column="WST_BEGI_DATE" />
+        <result property="endDate" column="WST_ENDX_DATE" />
+        <result property="errorText" column="WST_ERRO_TEXT" />
+        <collection property="importLines" ofType="com.barebonebatch.common.domain.ImportLine">
+            <id property="imlIden" column="IML_IDEN" />
+            <result property="wstIden" column="WST_IDEN" />
+            <result property="imlNumb" column="IML_NUMB" />
+            <result property="imlText" column="IML_TEXT" />
+            <result property="imlErroText" column="IML_ERRO_TEXT" />
+        </collection>
+    </resultMap>
+
+    <resultMap id="MappingResultMap" type="com.barebonebatch.common.domain.Mapping">
+        <id property="iden" column="IDEN" />
+        <result property="id" column="ID" />
+        <result property="mappingType" column="MAPPING_TYPE" />
+        <collection property="fields" ofType="com.barebonebatch.common.domain.MappingFields">
+            <id property="iden" column="IDEN" />
+            <result property="mappingFk" column="MAPPINGFK" />
+            <result property="id" column="ID" />
+            <result property="description" column="DESCRIPTION" />
+            <result property="property" column="PROPERTY" />
+            <result property="transformer" column="TRANSFORMER" />
+            <result property="pattern" column="PATTERN" />
+            <result property="mandatory" column="MANDATORY" />
+            <result property="enable" column="ENABLE" />
+            <result property="offset" column="OFFSET" />
+            <result property="length" column="LENGTH" />
+        </collection>
+    </resultMap>
+
+
+</mapper>
