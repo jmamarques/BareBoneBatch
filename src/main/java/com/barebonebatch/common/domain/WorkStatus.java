@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -24,5 +25,7 @@ public class WorkStatus {
     private LocalDateTime endDate;
 
     private String errorText;
+
+    private List<ImportLine> importLines;
 
 }
