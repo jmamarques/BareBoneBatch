@@ -5,15 +5,15 @@ services:
     image: mysql:latest
     container_name: mysql-db
     environment:
-      MYSQL_ROOT_PASSWORD: secretWallet
-      MYSQL_DATABASE: wallet
+      MYSQL_ROOT_PASSWORD: secretBatch
+      MYSQL_DATABASE: batch
     ports:
       - "3306:3306"
     volumes:
       - ../database/init.sql:/docker-entrypoint-initdb.d/01_init.sql
       - ../database/schema.sql:/docker-entrypoint-initdb.d/02_schema.sql
       - ../database/functions.sql:/docker-entrypoint-initdb.d/03_functions.sql
-      -
+      - ../database/schema2.sql:/docker-entrypoint-initdb.d/04_schema.sql
 volumes:
   esdata:
     driver: local
