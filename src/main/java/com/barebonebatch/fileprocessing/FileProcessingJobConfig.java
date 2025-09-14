@@ -93,7 +93,6 @@ public class FileProcessingJobConfig {
         return new JobBuilder("fileProcessingJob", jobRepository)
                 .listener(listener)
                 .start(processFileStep)
-                .
                 .build();
     }
 }
