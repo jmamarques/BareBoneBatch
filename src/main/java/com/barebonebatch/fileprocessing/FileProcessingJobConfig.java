@@ -1,13 +1,8 @@
 package com.mycompany.mybatchapp.job;
 
-import com.mycompany.mybatchapp.fileprocessing.domain.UserData;
-import com.mycompany.mybatchapp.fileprocessing.processor.UserDataItemProcessor;
-import com.mycompany.mybatchapp.common.listener.JobCompletionNotificationListener;
-
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
-import org.springframework.batch.core.listener.JobExecutionListener;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
@@ -25,7 +20,7 @@ import javax.sql.DataSource;
 
 @Configuration
 public class FileProcessingJobConfig {
-
+/*
     private final JobRepository jobRepository;
     private final PlatformTransactionManager transactionManager;
     private final DataSource dataSource;
@@ -94,5 +89,5 @@ public class FileProcessingJobConfig {
                 .listener(listener)
                 .start(processFileStep)
                 .build();
-    }
+    }*/
 }

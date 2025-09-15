@@ -39,6 +39,22 @@
             <result property="length" column="LENGTH" />
         </collection>
     </resultMap>
+    <select id="getWorkStatusPending" resultType="WorkStatusResultMap">
+        select ws.WST_IDEN,
+               WST_WORK_IDEN,
+               WST_FILE_IDEN,
+               WST_STAT_CODE,
+               WST_CREA_DATE,
+               WST_BEGI_DATE,
+               WST_ENDX_DATE,
+               WST_ERRO_TEXT,
+               il.IML_IDEN,
+               IML_NUMB,
+               IML_TEXT,
+               IML_ERRO_TEXT
+        from cod.WORK_STATUS ws
+                 inner join cod.IMPORT_LINE il on ws.WST_IDEN = il.WST_IDEN
+    </select>
 
 
 </mapper>

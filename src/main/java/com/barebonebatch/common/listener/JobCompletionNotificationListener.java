@@ -1,13 +1,20 @@
 package com.barebonebatch.common.listener;
 
+import com.barebonebatch.common.dao.JobDao;
+import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.JobExecutionListener;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
 @Component
 public class JobCompletionNotificationListener implements JobExecutionListener {
 
     @Autowired
-    private UserMapper userMapper;
+    private JobDao jobDao;
 
     /**
      * Called before a job is executed.
@@ -22,10 +29,10 @@ public class JobCompletionNotificationListener implements JobExecutionListener {
         jobRun.put("id", jobExecution.getJobId());
         jobRun.put("jobName", jobExecution.getJobInstance().getJobName());
         jobRun.put("status", jobExecution.getStatus().name());
-        jobRun.put("startTime", new Timestamp(jobExecution.getStartTime().getTime()));
+        jobRun.put("startTime", LocalDateTime.now());
         jobRun.put("endTime", null); // Set end time to null initially.
         jobRun.put("exitMessage", "Job started successfully.");
-        userMapper.insertJobRun(jobRun);
+//        jobDao.insertJobRun(jobRun);
     }
 
     /**
@@ -40,7 +47,7 @@ public class JobCompletionNotificationListener implements JobExecutionListener {
         Map<String, Object> jobRun = new HashMap<>();
         jobRun.put("id", jobExecution.getJobId());
         jobRun.put("status", jobExecution.getStatus().name());
-        jobRun.put("endTime", new Timestamp(jobExecution.getEndTime().getTime()));
+        jobRun.put("endTime", LocalDateTime.now());
 
         String exitMessage = "Job finished successfully.";
         if (!jobExecution.getExitStatus().getExitCode().equals("COMPLETED")) {
@@ -52,6 +59,6 @@ public class JobCompletionNotificationListener implements JobExecutionListener {
             }
         }
         jobRun.put("exitMessage", exitMessage);
-        userMapper.updateJobRun(jobRun);
+//        JobDao.updateJobRun(jobRun);
     }
 }
