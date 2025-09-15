@@ -39,7 +39,7 @@
             <result property="length" column="LENGTH" />
         </collection>
     </resultMap>
-    <select id="getWorkStatusPending" resultType="WorkStatusResultMap">
+    <select id="getWorkStatusPending" resultMap="WorkStatusResultMap">
         select ws.WST_IDEN,
                WST_WORK_IDEN,
                WST_FILE_IDEN,
