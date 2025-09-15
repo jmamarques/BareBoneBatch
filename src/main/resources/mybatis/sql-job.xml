@@ -3,43 +3,65 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.barebonebatch.common.dao.JobDao">
+    <resultMap id="ImportLineResultMap" type="com.barebonebatch.common.domain.ImportLine">
+        <id property="imlIden" column="IML_IDEN"/>
+        <result property="wstIden" column="WST_IDEN"/>
+        <result property="imlNumb" column="IML_NUMB"/>
+        <result property="imlText" column="IML_TEXT"/>
+        <result property="imlErroText" column="IML_ERRO_TEXT"/>
+    </resultMap>
     <resultMap id="WorkStatusResultMap" type="com.barebonebatch.common.domain.WorkStatus">
-        <id property="id" column="WST_IDEN" />
-        <result property="workIden" column="WST_WORK_IDEN" />
-        <result property="fileIden" column="WST_FILE_IDEN" />
-        <result property="statusCode" column="WST_STAT_CODE" />
-        <result property="creationDate" column="WST_CREA_DATE" />
-        <result property="beginDate" column="WST_BEGI_DATE" />
-        <result property="endDate" column="WST_ENDX_DATE" />
-        <result property="errorText" column="WST_ERRO_TEXT" />
+        <id property="wstIden" column="WST_IDEN"/>
+        <result property="wstWorkIden" column="WST_WORK_IDEN"/>
+        <result property="wstFileIden" column="WST_FILE_IDEN"/>
+        <result property="wstStatCode" column="WST_STAT_CODE"/>
+        <result property="wstCreaDate" column="WST_CREA_DATE"/>
+        <result property="wstBegiDate" column="WST_BEGI_DATE"/>
+        <result property="wstEndxDate" column="WST_ENDX_DATE"/>
+        <result property="wstErrorText" column="WST_ERRO_TEXT"/>
         <collection property="importLines" ofType="com.barebonebatch.common.domain.ImportLine">
-            <id property="imlIden" column="IML_IDEN" />
-            <result property="wstIden" column="WST_IDEN" />
-            <result property="imlNumb" column="IML_NUMB" />
-            <result property="imlText" column="IML_TEXT" />
-            <result property="imlErroText" column="IML_ERRO_TEXT" />
+            <id property="imlIden" column="IML_IDEN"/>
+            <result property="wstIden" column="WST_IDEN"/>
+            <result property="imlNumb" column="IML_NUMB"/>
+            <result property="imlText" column="IML_TEXT"/>
+            <result property="imlErroText" column="IML_ERRO_TEXT"/>
         </collection>
     </resultMap>
 
     <resultMap id="MappingResultMap" type="com.barebonebatch.common.domain.Mapping">
-        <id property="iden" column="IDEN" />
-        <result property="id" column="ID" />
-        <result property="mappingType" column="MAPPING_TYPE" />
+        <id property="iden" column="IDEN"/>
+        <result property="id" column="ID"/>
+        <result property="mappingType" column="MAPPING_TYPE"/>
         <collection property="fields" ofType="com.barebonebatch.common.domain.MappingFields">
-            <id property="iden" column="IDEN" />
-            <result property="mappingFk" column="MAPPINGFK" />
-            <result property="id" column="ID" />
-            <result property="description" column="DESCRIPTION" />
-            <result property="property" column="PROPERTY" />
-            <result property="transformer" column="TRANSFORMER" />
-            <result property="pattern" column="PATTERN" />
-            <result property="mandatory" column="MANDATORY" />
-            <result property="enable" column="ENABLE" />
-            <result property="offset" column="OFFSET" />
-            <result property="length" column="LENGTH" />
+            <id property="iden" column="IDEN"/>
+            <result property="mappingFk" column="MAPPINGFK"/>
+            <result property="id" column="ID"/>
+            <result property="description" column="DESCRIPTION"/>
+            <result property="property" column="PROPERTY"/>
+            <result property="transformer" column="TRANSFORMER"/>
+            <result property="pattern" column="PATTERN"/>
+            <result property="mandatory" column="MANDATORY"/>
+            <result property="enable" column="ENABLE"/>
+            <result property="offset" column="OFFSET"/>
+            <result property="length" column="LENGTH"/>
         </collection>
     </resultMap>
-    <select id="getWorkStatusPending" resultMap="WorkStatusResultMap">
+    <select id="getNextWorkStatusPending" resultMap="WorkStatusResultMap">
+        select ws.WST_IDEN,
+               WST_WORK_IDEN,
+               WST_FILE_IDEN,
+               WST_STAT_CODE,
+               WST_CREA_DATE,
+               WST_BEGI_DATE,
+               WST_ENDX_DATE,
+               WST_ERRO_TEXT
+        from cod.WORK_STATUS ws
+        where ws.WST_STAT_CODE in ('10')
+        ORDER BY WST_IDEN
+        limit 1
+    </select>
+
+    <select id="getWorkStatusByWstIden" resultMap="WorkStatusResultMap">
         select ws.WST_IDEN,
                WST_WORK_IDEN,
                WST_FILE_IDEN,
@@ -54,7 +76,55 @@
                IML_ERRO_TEXT
         from cod.WORK_STATUS ws
                  inner join cod.IMPORT_LINE il on ws.WST_IDEN = il.WST_IDEN
+        where ws.WST_IDEN = #{wstIden}
     </select>
+    <select id="getLinesByWstIden" resultMap="ImportLineResultMap">
+        select ws.WST_IDEN,
+               il.IML_IDEN,
+               IML_NUMB,
+               IML_TEXT,
+               IML_ERRO_TEXT
+        from cod.WORK_STATUS ws
+                 inner join cod.IMPORT_LINE il on ws.WST_IDEN = il.WST_IDEN
+        where ws.WST_IDEN = #{wstIden}
+    </select>
+
+    <select id="getWorkByFileIden" resultType="com.barebonebatch.common.domain.Work">
+        select ID, SYSTEMCODE, CONTEXT, WORKCLASSNAME, DESCRIPTION, IS_ACTIVE, IDEN
+        from cod.WORK
+        where SYSTEMCODE = #{fileIden}
+          AND IS_ACTIVE = 'Y'
+    </select>
+
+    <select id="getMappingById" resultMap="MappingResultMap">
+        select "ID", "MAPPING_TYPE", "IDEN"
+        from cod.MAPPING m
+                 inner join cod.MAPPING_FIELDS mf on m."IDEN" = mf."MAPPINGFK"
+        where m.ID = #{id}
+          AND mf.ENABLE = 'Y'
+          and mf.PROPERTY is not null
+        order by mf.OFFSET, mf.ID
+    </select>
+
+    <update id="updateWorkStatus">
+        update cod.WORK_STATUS
+        set WST_BEGI_DATE = #{wstBegiDate}
+          , WST_STAT_CODE = #{wstStatCode}
+          , WST_ENDX_DATE = #{wstEndxDate}
+          , WST_ERRO_TEXT = #{wstErrorText}
+        where WST_IDEN = #{wstIden}
+    </update>
+    <update id="updateWorkStatusEnd">
+        update cod.WORK_STATUS
+        set WST_STAT_CODE = (select case when count(IML_ERRO_TEXT) > 0 then 30 else 35 END
+                             from cod.WORK_STATUS ws
+                                      inner join cod.IMPORT_LINE il on ws.WST_IDEN = il.WST_IDEN
+                             where il.WST_IDEN = #{wstIden}
+                               and IML_ERRO_TEXT != '')
+          , WST_ENDX_DATE = SYSDATE
+          , WST_ERRO_TEXT = #{wstErrorText}
+        where WST_IDEN = #{wstIden}
+    </update>
 
 
 </mapper>

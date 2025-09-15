@@ -1,5 +1,7 @@
 package com.barebonebatch.common.config;
 
+import org.springframework.context.annotation.Configuration;
+
 import java.lang.annotation.*;
 
 /**

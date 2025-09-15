@@ -1,6 +1,7 @@
 package com.barebonebatch.common.listener;
 
 import com.barebonebatch.common.dao.JobDao;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.JobExecutionListener;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,10 +12,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Component
+@Log4j2
 public class JobCompletionNotificationListener implements JobExecutionListener {
-
-    @Autowired
-    private JobDao jobDao;
 
     /**
      * Called before a job is executed.
@@ -24,7 +23,7 @@ public class JobCompletionNotificationListener implements JobExecutionListener {
      */
     @Override
     public void beforeJob(JobExecution jobExecution) {
-        System.out.println("Job started: " + jobExecution.getJobInstance().getJobName());
+       log.info("Job started: " + jobExecution.getJobInstance().getJobName());
         Map<String, Object> jobRun = new HashMap<>();
         jobRun.put("id", jobExecution.getJobId());
         jobRun.put("jobName", jobExecution.getJobInstance().getJobName());
@@ -43,7 +42,7 @@ public class JobCompletionNotificationListener implements JobExecutionListener {
      */
     @Override
     public void afterJob(JobExecution jobExecution) {
-        System.out.println("Job finished with status: " + jobExecution.getStatus());
+        log.info("Job finished with status: " + jobExecution.getStatus());
         Map<String, Object> jobRun = new HashMap<>();
         jobRun.put("id", jobExecution.getJobId());
         jobRun.put("status", jobExecution.getStatus().name());

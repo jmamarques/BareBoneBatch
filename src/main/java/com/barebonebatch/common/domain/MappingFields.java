@@ -11,6 +11,7 @@ public class MappingFields {
     private String id;
     private String description;
     private String property;
+    private String type;
     private String transformer;
     private String pattern;
     private String mandatory;

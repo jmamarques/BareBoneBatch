@@ -17,4 +17,13 @@ VALUES (201, 10, 1, 'Line 1A', NULL),
        (208, 20, 3, 'Line 2C', NULL),
        (209, 20, 4, 'Line 2D', NULL),
        (210, 20, 5, 'Line 2E', NULL);
+
+
+insert into cod.WORK ("ID", "SYSTEMCODE", "CONTEXT", "WORKCLASSNAME", "DESCRIPTION", "IS_ACTIVE", "IDEN")
+values (1, '1000', 'Finance', 'PayrollJob', 'Handles payroll processing', 1, 1001),
+       (2, '2000', 'HR', 'RecruitmentJob', 'Manages recruitment workflow', 1, 1002),
+       (3, 'XYZ001', 'IT', 'BackupJob', 'Performs system backups', 0, 1003),
+       (4, 'ABC003', 'Finance', 'InvoiceJob', 'Processes invoices', 1, 1004),
+       (5, 'DEF001', 'Logistics', 'ShippingJob', 'Coordinates shipments', 1, 1005);
+
 commit;

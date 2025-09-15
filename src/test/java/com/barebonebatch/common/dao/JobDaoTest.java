@@ -25,7 +25,7 @@ class JobDaoTest {
         // assume there is a pending status in the test database
 
         // when
-        List<WorkStatus> workStatus = jobDao.getWorkStatusPending();
+        WorkStatus workStatus = jobDao.getNextWorkStatusPending();
 
         // then
         assertThat(workStatus).isNotNull();
