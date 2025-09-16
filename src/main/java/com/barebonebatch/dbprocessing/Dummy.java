@@ -9,5 +9,7 @@ import lombok.*;
 @ToString
 @EqualsAndHashCode
 public class Dummy {
-    private String text;
+    private String text1;
+    private String text2;
+    private String text3;
 }

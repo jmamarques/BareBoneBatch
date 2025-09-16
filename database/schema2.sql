@@ -43,6 +43,7 @@ CREATE TABLE MAPPING_FIELDS (
                                     PATTERN VARCHAR(200) DEFAULT NULL,
                                     MANDATORY VARCHAR(5) NOT NULL DEFAULT 'N',
                                     ENABLE VARCHAR(5),
+                                    TYPE VARCHAR(100),
                                     `OFFSET` INT(5),
                                     LENGTH INT(5),
                                     PRIMARY KEY (IDEN),
@@ -51,6 +52,12 @@ CREATE TABLE MAPPING_FIELDS (
                                     CHECK (`OFFSET` >= 0),
                                     CHECK (LENGTH > 0),
                                     FOREIGN KEY (MAPPINGFK) REFERENCES MAPPING(IDEN)
+);
+
+CREATE TABLE DUMMY (
+                               text1 VARCHAR(100),
+                               text2 VARCHAR(100),
+                               text3 VARCHAR(100)
 );
 
 CREATE TABLE IMPORT_LINE (
@@ -75,6 +82,8 @@ GRANT SELECT ON cod.WORK_STATUS TO 'writer_user'@'%';
 GRANT SELECT ON cod.MAPPING TO 'writer_user'@'%';
 GRANT SELECT ON cod.MAPPING_FIELDS TO 'writer_user'@'%';
 GRANT SELECT ON cod.WORK TO 'writer_user'@'%';
+GRANT SELECT ON cod.DUMMY TO 'reader_user'@'%';
+GRANT SELECT ON cod.DUMMY TO 'writer_user'@'%';
 
 -- Apply privileges
 FLUSH PRIVILEGES;

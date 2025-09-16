@@ -22,5 +22,6 @@ public class WorkStatus {
     private LocalDateTime wstEndxDate;
     private String wstErrorText;
     private List<ImportLine> importLines;
+    private Integer countLinesErrors;
 
 }

@@ -25,6 +25,10 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * Schedules and manages the execution of batch jobs.
+ * This class scans for new job requests, validates them, and launches the corresponding Spring Batch jobs.
+ */
 @Component
 @EnableScheduling
 @Log4j2
@@ -39,8 +43,12 @@ public class JobScheduler {
     @Autowired
     private ApplicationContext applicationContext;
 
+    /**
+     * Periodically checks for new pending job requests and initiates their processing.
+     * This method is scheduled to run at a fixed rate. It fetches a pending job,
+     * processes it, and handles any exceptions that occur during the process.
+     */
     @Scheduled(fixedRate = 10000)
-    @Transactional
     public void checkForNewJobs() {
         log.info("Checking for New Jobs");
         WorkStatus jobRequest = jobDao.getNextWorkStatusPending();
@@ -51,22 +59,20 @@ public class JobScheduler {
         try {
             processJobRequest(jobRequest);
         } catch (Exception e) {
-            log.error("Error processing job request with ID {}: {}", jobRequest.getWstIden(), e.getMessage());
+            log.error("Error processing job request with ID {}: msg:{}", jobRequest.getWstIden(), e.getMessage());
             updateWorkStatusWithError(jobRequest, e.getMessage());
         }
     }
 
     private void processJobRequest(WorkStatus jobRequest) {
         String[] workIdentifierParts = getWorkIdentifierParts(jobRequest.getWstFileIden());
+        List<Work> works = findWorks(workIdentifierParts[0]);
 
         updateWorkStatusToProcessing(jobRequest);
-
-        List<Work> works = findWorks(workIdentifierParts[0]);
 
         for (Work work : works) {
             launchJobForWork(work, jobRequest.getWstIden());
         }
-        jobDao.updateWorkStatusEnd(jobRequest);
     }
 
     private String[] getWorkIdentifierParts(String workIdentifier) {

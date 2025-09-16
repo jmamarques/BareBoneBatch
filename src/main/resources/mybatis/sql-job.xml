@@ -19,6 +19,7 @@
         <result property="wstBegiDate" column="WST_BEGI_DATE"/>
         <result property="wstEndxDate" column="WST_ENDX_DATE"/>
         <result property="wstErrorText" column="WST_ERRO_TEXT"/>
+        <result property="countLinesErrors" column="COUNT_LINES_ERRORS"/>
         <collection property="importLines" ofType="com.barebonebatch.common.domain.ImportLine">
             <id property="imlIden" column="IML_IDEN"/>
             <result property="wstIden" column="WST_IDEN"/>
@@ -33,9 +34,9 @@
         <result property="id" column="ID"/>
         <result property="mappingType" column="MAPPING_TYPE"/>
         <collection property="fields" ofType="com.barebonebatch.common.domain.MappingFields">
-            <id property="iden" column="IDEN"/>
+            <id property="iden" column="IDEN_FIELD"/>
             <result property="mappingFk" column="MAPPINGFK"/>
-            <result property="id" column="ID"/>
+            <result property="id" column="ID_FIELD"/>
             <result property="description" column="DESCRIPTION"/>
             <result property="property" column="PROPERTY"/>
             <result property="transformer" column="TRANSFORMER"/>
@@ -44,6 +45,7 @@
             <result property="enable" column="ENABLE"/>
             <result property="offset" column="OFFSET"/>
             <result property="length" column="LENGTH"/>
+            <result property="type" column="TYPE"/>
         </collection>
     </resultMap>
     <select id="getNextWorkStatusPending" resultMap="WorkStatusResultMap">
@@ -70,13 +72,12 @@
                WST_BEGI_DATE,
                WST_ENDX_DATE,
                WST_ERRO_TEXT,
-               il.IML_IDEN,
-               IML_NUMB,
-               IML_TEXT,
-               IML_ERRO_TEXT
+               count(il.IML_IDEN) as COUNT_LINES_ERRORS
         from cod.WORK_STATUS ws
-                 inner join cod.IMPORT_LINE il on ws.WST_IDEN = il.WST_IDEN
+                 left join cod.IMPORT_LINE il on ws.WST_IDEN = il.WST_IDEN and il.IML_ERRO_TEXT != ''
         where ws.WST_IDEN = #{wstIden}
+        group by WST_BEGI_DATE, WST_CREA_DATE, WST_STAT_CODE, WST_FILE_IDEN, WST_WORK_IDEN,
+                 ws.WST_IDEN, WST_ERRO_TEXT, WST_ENDX_DATE
     </select>
     <select id="getLinesByWstIden" resultMap="ImportLineResultMap">
         select ws.WST_IDEN,
@@ -87,6 +88,7 @@
         from cod.WORK_STATUS ws
                  inner join cod.IMPORT_LINE il on ws.WST_IDEN = il.WST_IDEN
         where ws.WST_IDEN = #{wstIden}
+        ORDER BY IML_NUMB
     </select>
 
     <select id="getWorkByFileIden" resultType="com.barebonebatch.common.domain.Work">
@@ -97,12 +99,10 @@
     </select>
 
     <select id="getMappingById" resultMap="MappingResultMap">
-        select "ID", "MAPPING_TYPE", "IDEN"
+        select m.ID, m.MAPPING_TYPE, m.IDEN, mf.MAPPINGFK, mf.IDEN AS IDEN_FIELD, mf.ID AS ID_FIELD, mf.DESCRIPTION, mf.PROPERTY, mf.TRANSFORMER, mf.PATTERN, mf.MANDATORY, mf.ENABLE, mf.OFFSET, mf.LENGTH, mf.TYPE
         from cod.MAPPING m
-                 inner join cod.MAPPING_FIELDS mf on m."IDEN" = mf."MAPPINGFK"
+                 inner join cod.MAPPING_FIELDS mf on m.IDEN = mf.MAPPINGFK
         where m.ID = #{id}
-          AND mf.ENABLE = 'Y'
-          and mf.PROPERTY is not null
         order by mf.OFFSET, mf.ID
     </select>
 
@@ -121,10 +121,17 @@
                                       inner join cod.IMPORT_LINE il on ws.WST_IDEN = il.WST_IDEN
                              where il.WST_IDEN = #{wstIden}
                                and IML_ERRO_TEXT != '')
-          , WST_ENDX_DATE = SYSDATE
+          , WST_ENDX_DATE = CURRENT_DATE
           , WST_ERRO_TEXT = #{wstErrorText}
         where WST_IDEN = #{wstIden}
     </update>
 
+    <insert id="dummyinsert">
+        INSERT INTO cod.DUMMY (text1, text2, text3) VALUES (#{text1}, #{text2}, #{text3})
+    </insert>
+
+    <update id="updateImportLineWithError">
+        UPDATE cod.IMPORT_LINE SET IML_ERRO_TEXT = #{imlErroText} where IML_IDEN = #{imlIden}
+    </update>
 
 </mapper>

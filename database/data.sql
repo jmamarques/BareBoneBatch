@@ -26,4 +26,16 @@ values (1, '1000', 'Finance', 'PayrollJob', 'Handles payroll processing', 1, 100
        (4, 'ABC003', 'Finance', 'InvoiceJob', 'Processes invoices', 1, 1004),
        (5, 'DEF001', 'Logistics', 'ShippingJob', 'Coordinates shipments', 1, 1005);
 
+
+
+INSERT INTO cod.MAPPING (ID, MAPPING_TYPE, IDEN)
+VALUES ('mapping_1', 'strToObject', 1),
+       ('mapping_2', 'strToObject', 2);
+INSERT INTO cod.MAPPING_FIELDS (MAPPINGFK, IDEN, ID, DESCRIPTION, PROPERTY, TRANSFORMER, PATTERN, MANDATORY, ENABLE,
+                                OFFSET, LENGTH, "TYPE")
+VALUES (1, 1, '1', 'example 1', 'text1', '', '', 'Y', 'Y', 0, 10, 'string'),
+       (1, 2, '2', 'example 2', 'text2', '', '', 'Y', 'Y', 10, 10, 'string'),
+       (1, 3, '3', 'example 3', 'text3', '', '', 'Y', 'N', 10, 10, 'string');
+
+
 commit;
