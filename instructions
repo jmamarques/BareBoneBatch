@@ -380,3 +380,295 @@ This pipeline will:
 · ✅ Perform Oracle-specific validations
 
 The pipeline runs automatically when SQL files are modified and provides clear feedback about any validation failures.
+
+
+I'll modify the pipeline to validate only new SQL files and files changed in the current commit/merge request. Here's the updated configuration:
+
+GitLab CI Pipeline for Changed Files Only
+
+```yaml
+stages:
+  - validation
+
+variables:
+  RELEASE_TAG_PATTERN: "^-- Release: v[0-9]+\\.[0-9]+\\.[0-9]+"
+
+validate_changed_sql_files:
+  stage: validation
+  image: python:3.9
+  before_script:
+    - pip install sqlparse
+  script:
+    - |
+      python << 'EOF'
+      import os
+      import re
+      import sys
+      import sqlparse
+      import subprocess
+      
+      # Basic filename pattern (adjust as needed)
+      FILENAME_PATTERN = r'^[a-z][a-z0-9_]*\.sql$'
+      release_pattern = r"^-- Release: v\d+\.\d+\.\d+"
+      
+      def get_changed_files():
+          """Get list of changed SQL files in the current commit/MR"""
+          try:
+              # For merge requests
+              if os.environ.get('CI_MERGE_REQUEST_IID'):
+                  result = subprocess.run([
+                      'git', 'diff', '--name-only', 
+                      '--diff-filter=AM', 
+                      f"origin/{os.environ.get('CI_MERGE_REQUEST_TARGET_BRANCH_NAME', 'main')}...HEAD"
+                  ], capture_output=True, text=True, check=True)
+              # For branch pipelines
+              elif os.environ.get('CI_COMMIT_BEFORE_SHA') and os.environ.get('CI_COMMIT_BEFORE_SHA') != '0000000000000000000000000000000000000000':
+                  result = subprocess.run([
+                      'git', 'diff', '--name-only', 
+                      '--diff-filter=AM',
+                      os.environ.get('CI_COMMIT_BEFORE_SHA'), 
+                      os.environ.get('CI_COMMIT_SHA')
+                  ], capture_output=True, text=True, check=True)
+              # For initial commit (no previous commit)
+              else:
+                  result = subprocess.run([
+                      'git', 'show', '--name-only', '--pretty=format:', 'HEAD'
+                  ], capture_output=True, text=True, check=True)
+              
+              changed_files = result.stdout.strip().split('\n')
+              return [f for f in changed_files if f.endswith('.sql')]
+              
+          except subprocess.CalledProcessError as e:
+              print(f"Error getting changed files: {e}")
+              return []
+          except Exception as e:
+              print(f"Unexpected error: {e}")
+              return []
+      
+      def validate_sql_file(sql_file):
+          """Validate a single SQL file"""
+          print(f"📄 Validating: {sql_file}")
+          file_errors = []
+          
+          # Check if file exists (it should for new/modified files)
+          if not os.path.exists(sql_file):
+              file_errors.append("File not found in current commit")
+              return file_errors
+          
+          # 1. Check release tag
+          try:
+              with open(sql_file, 'r', encoding='utf-8') as f:
+                  first_line = f.readline().strip()
+              
+              if not re.match(release_pattern, first_line):
+                  file_errors.append(f"Missing or invalid release tag. First line: '{first_line}'")
+                  print(f"   ❌ Release tag: Invalid")
+              else:
+                  print(f"   ✅ Release tag: {first_line}")
+          except Exception as e:
+              file_errors.append(f"Error reading file: {e}")
+          
+          # 2. Validate filename convention
+          filename = os.path.basename(sql_file)
+          if not re.match(FILENAME_PATTERN, filename, re.IGNORECASE):
+              file_errors.append(f"Filename doesn't match pattern: {FILENAME_PATTERN}")
+              print(f"   ❌ Filename convention: Invalid")
+          else:
+              print(f"   ✅ Filename convention: OK")
+          
+          # 3. Validate SQL syntax
+          try:
+              with open(sql_file, 'r', encoding='utf-8') as f:
+                  content = f.read()
+              
+              # Skip empty files
+              if content.strip():
+                  parsed = sqlparse.parse(content)
+                  if not parsed:
+                      file_errors.append("Invalid SQL syntax - cannot parse")
+                      print(f"   ❌ SQL syntax: Invalid")
+                  else:
+                      print(f"   ✅ SQL syntax: OK")
+              else:
+                  print(f"   ⚠️  SQL syntax: Empty file")
+                  
+          except Exception as e:
+              file_errors.append(f"SQL syntax error: {str(e)}")
+              print(f"   ❌ SQL syntax: Error")
+          
+          return file_errors
+      
+      # Main execution
+      changed_sql_files = get_changed_files()
+      
+      if not changed_sql_files:
+          print("✅ No SQL files changed in this commit/merge request")
+          sys.exit(0)
+      
+      print(f"🔍 Found {len(changed_sql_files)} changed SQL files to validate\n")
+      
+      validation_errors = []
+      for sql_file in changed_sql_files:
+          file_errors = validate_sql_file(sql_file)
+          if file_errors:
+              validation_errors.append({
+                  'file': sql_file,
+                  'errors': file_errors
+              })
+          print()
+      
+      # Print summary
+      if validation_errors:
+          print("🚫 VALIDATION FAILED")
+          print("=" * 50)
+          for error_info in validation_errors:
+              print(f"\n📁 {error_info['file']}")
+              for error in error_info['errors']:
+                  print(f"   ❌ {error}")
+          
+          print(f"\n❌ Validation failed for {len(validation_errors)} file(s)")
+          sys.exit(1)
+      else:
+          print("🎉 ALL VALIDATIONS PASSED!")
+          print(f"✅ Successfully validated {len(changed_sql_files)} changed SQL files")
+      EOF
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+```
+
+Alternative: Simpler Git Diff Approach
+
+```yaml
+stages:
+  - validation
+
+variables:
+  RELEASE_TAG_PATTERN: "^-- Release: v[0-9]+\\.[0-9]+\\.[0-9]+"
+
+validate_changed_sql:
+  stage: validation
+  image: python:3.9
+  before_script:
+    - pip install sqlparse
+  script:
+    - |
+      python << 'EOF'
+      import os
+      import re
+      import sys
+      import sqlparse
+      
+      FILENAME_PATTERN = r'^[a-z][a-z0-9_]*\.sql$'
+      release_pattern = r"^-- Release: v\d+\.\d+\.\d+"
+      
+      # Get changed files using GitLab CI environment variables
+      changed_files = []
+      
+      # Method 1: Check CI_COMMIT_BEFORE_SHA to CI_COMMIT_SHA (pushes)
+      if os.environ.get('CI_COMMIT_BEFORE_SHA') and os.environ.get('CI_COMMIT_BEFORE_SHA') != '0000000000000000000000000000000000000000':
+          import subprocess
+          result = subprocess.run([
+              'git', 'diff', '--name-only', '--diff-filter=AM',
+              os.environ['CI_COMMIT_BEFORE_SHA'], os.environ['CI_COMMIT_SHA']
+          ], capture_output=True, text=True)
+          changed_files = [f for f in result.stdout.strip().split('\n') if f.endswith('.sql')]
+      
+      # Method 2: For merge requests, check changed files in MR
+      elif os.environ.get('CI_MERGE_REQUEST_CHANGED_FILES'):
+          # This requires GitLab 13.4+ and appropriate CI variables setup
+          changed_files = [f for f in os.environ.get('CI_MERGE_REQUEST_CHANGED_FILES', '').split(' ') if f.endswith('.sql')]
+      
+      # Method 3: Fallback - check all SQL files in latest commit
+      else:
+          import subprocess
+          result = subprocess.run([
+              'git', 'show', '--name-only', '--pretty=format:', 'HEAD'
+          ], capture_output=True, text=True)
+          changed_files = [f for f in result.stdout.strip().split('\n') if f.endswith('.sql')]
+      
+      if not changed_files:
+          print("✅ No SQL files changed in this commit")
+          sys.exit(0)
+      
+      print(f"🔍 Validating {len(changed_files)} changed SQL file(s): {', '.join(changed_files)}\n")
+      
+      validation_errors = []
+      for sql_file in changed_files:
+          if not os.path.exists(sql_file):
+              print(f"⚠️  File {sql_file} not found, skipping")
+              continue
+              
+          print(f"📄 Validating: {sql_file}")
+          file_errors = []
+          
+          # Release tag check
+          with open(sql_file, 'r') as f:
+              first_line = f.readline().strip()
+          if not re.match(release_pattern, first_line):
+              file_errors.append(f"Invalid release tag: '{first_line}'")
+          
+          # Filename convention
+          filename = os.path.basename(sql_file)
+          if not re.match(FILENAME_PATTERN, filename, re.IGNORECASE):
+              file_errors.append(f"Filename doesn't match pattern")
+          
+          # SQL syntax
+          try:
+              with open(sql_file, 'r') as f:
+                  content = f.read()
+              if content.strip() and not sqlparse.parse(content):
+                  file_errors.append("SQL syntax error")
+          except Exception as e:
+              file_errors.append(f"SQL parsing error: {e}")
+          
+          if file_errors:
+              validation_errors.append({'file': sql_file, 'errors': file_errors})
+              for error in file_errors:
+                  print(f"   ❌ {error}")
+          else:
+              print(f"   ✅ All checks passed")
+          print()
+      
+      if validation_errors:
+          print(f"🚫 Validation failed for {len(validation_errors)} file(s)")
+          sys.exit(1)
+      else:
+          print("🎉 All changed SQL files validated successfully!")
+      EOF
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "**/*.sql"
+    - if: $CI_COMMIT_BRANCH
+      changes:
+        - "**/*.sql"
+```
+
+GitLab CI Configuration for Merge Requests
+
+To ensure this runs properly on merge requests, you might need to add this to your .gitlab-ci.yml:
+
+```yaml
+workflow:
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH
+```
+
+Key Features:
+
+1. Targets Only Changed Files: Only validates SQL files that were added or modified in the current commit/merge request
+2. Merge Request Support: Works with both branch pushes and merge requests
+3. Efficient: Doesn't waste time validating unchanged files
+4. Clear Context: Shows exactly which files are being validated and why
+
+How It Works:
+
+· For Merge Requests: Compares the feature branch with the target branch to find changed SQL files
+· For Branch Pushes: Uses git diff between the previous commit and current commit
+· For Initial Commits: Falls back to checking all files in the current commit
+
+The pipeline will only run when SQL files are changed and will only validate those specific files, making your CI process much faster and more focused.
