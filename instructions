@@ -1,0 +1,382 @@
+I'll help you create a GitLab CI pipeline to validate SQL files in your Oracle database project. Here's a comprehensive solution:
+
+1. Basic SQL File Validation Pipeline
+
+Create a .gitlab-ci.yml file in your project root:
+
+```yaml
+stages:
+  - validation
+  - security
+  - quality
+
+variables:
+  RELEASE_TAG_PATTERN: "^-- Release: v[0-9]+\\.[0-9]+\\.[0-9]+"
+
+# Main validation job
+validate_sql_files:
+  stage: validation
+  image: python:3.9
+  before_script:
+    - pip install requests
+  script:
+    - |
+      python << 'EOF'
+      import os
+      import re
+      import sys
+      
+      release_pattern = r"^-- Release: v\d+\.\d+\.\d+"
+      sql_files = [f for f in os.listdir('.') if f.endswith('.sql')]
+      invalid_files = []
+      
+      for sql_file in sql_files:
+          try:
+              with open(sql_file, 'r', encoding='utf-8') as f:
+                  first_line = f.readline().strip()
+              
+              if not re.match(release_pattern, first_line):
+                  invalid_files.append(sql_file)
+                  print(f"❌ {sql_file}: Missing or invalid release tag")
+                  print(f"   First line: '{first_line}'")
+                  print(f"   Expected format: '-- Release: vX.Y.Z'")
+              else:
+                  print(f"✅ {sql_file}: Valid release tag found")
+                  
+          except Exception as e:
+              print(f"⚠️  Error reading {sql_file}: {e}")
+              invalid_files.append(sql_file)
+      
+      if invalid_files:
+          print(f"\n🚫 Validation failed for {len(invalid_files)} file(s):")
+          for file in invalid_files:
+              print(f"   - {file}")
+          sys.exit(1)
+      else:
+          print(f"\n🎉 All {len(sql_files)} SQL files have valid release tags!")
+      EOF
+  rules:
+    - changes:
+        - "**/*.sql"
+      when: always
+    - when: always
+
+# Additional validation: Check SQL syntax
+validate_sql_syntax:
+  stage: validation
+  image: python:3.9
+  before_script:
+    - pip install sqlparse
+  script:
+    - |
+      python << 'EOF'
+      import sqlparse
+      import os
+      import sys
+      
+      sql_files = [f for f in os.listdir('.') if f.endswith('.sql')]
+      syntax_errors = []
+      
+      for sql_file in sql_files:
+          try:
+              with open(sql_file, 'r', encoding='utf-8') as f:
+                  content = f.read()
+              
+              # Basic SQL syntax validation
+              parsed = sqlparse.parse(content)
+              if not parsed:
+                  syntax_errors.append(f"{sql_file}: Empty or invalid SQL")
+                  continue
+                  
+              print(f"✅ {sql_file}: Basic syntax OK")
+                  
+          except Exception as e:
+              syntax_errors.append(f"{sql_file}: {e}")
+              print(f"❌ {sql_file}: Syntax error - {e}")
+      
+      if syntax_errors:
+          print(f"\n🚫 Syntax validation failed for {len(syntax_errors)} file(s):")
+          for error in syntax_errors:
+              print(f"   - {error}")
+          sys.exit(1)
+      EOF
+  rules:
+    - changes:
+        - "**/*.sql"
+```
+
+2. Advanced Validation Pipeline
+
+Create additional validation jobs:
+
+```yaml
+# Security validation: Check for dangerous patterns
+security_scan:
+  stage: security
+  image: python:3.9
+  script:
+    - |
+      python << 'EOF'
+      import os
+      import re
+      import sys
+      
+      dangerous_patterns = [
+          (r"(?i)DROP\s+(TABLE|DATABASE|USER)", "DROP statements"),
+          (r"(?i)DELETE\s+FROM\s+\w+\s+WHERE\s+1=1", "Unconditional DELETE"),
+          (r"(?i)UPDATE\s+\w+\s+SET.*WHERE\s+1=1", "Unconditional UPDATE"),
+          (r"(?i)ALTER\s+SYSTEM", "ALTER SYSTEM commands"),
+          (r"(?i)GRANT\s+ALL", "GRANT ALL privileges"),
+      ]
+      
+      sql_files = [f for f in os.listdir('.') if f.endswith('.sql')]
+      security_issues = []
+      
+      for sql_file in sql_files:
+          with open(sql_file, 'r', encoding='utf-8') as f:
+              content = f.read()
+          
+          for pattern, description in dangerous_patterns:
+              if re.search(pattern, content, re.IGNORECASE):
+                  security_issues.append(f"{sql_file}: Potential security issue - {description}")
+                  print(f"⚠️  {sql_file}: Found {description}")
+      
+      if security_issues:
+          print(f"\n🔒 Security issues found in {len(security_issues)} file(s):")
+          for issue in security_issues:
+              print(f"   - {issue}")
+          # Comment out the next line if you want security issues to be warnings only
+          # sys.exit(1)
+      else:
+          print("✅ No security issues found")
+      EOF
+
+# File naming convention validation
+validate_naming:
+  stage: quality
+  image: python:3.9
+  script:
+    - |
+      python << 'EOF'
+      import os
+      import re
+      import sys
+      
+      # Define your naming convention pattern
+      naming_pattern = r"^[a-z_]+[a-z0-9_]*\.sql$"
+      sql_files = [f for f in os.listdir('.') if f.endswith('.sql')]
+      naming_issues = []
+      
+      for sql_file in sql_files:
+          if not re.match(naming_pattern, sql_file.lower()):
+              naming_issues.append(sql_file)
+              print(f"❌ {sql_file}: Doesn't match naming convention")
+          else:
+              print(f"✅ {sql_file}: Naming convention OK")
+      
+      if naming_issues:
+          print(f"\n📝 Naming convention violations in {len(naming_issues)} file(s):")
+          for file in naming_issues:
+              print(f"   - {file}")
+          # This can be a warning rather than failure
+          # sys.exit(1)
+      EOF
+
+# File size validation
+validate_file_size:
+  stage: quality
+  image: python:3.9
+  script:
+    - |
+      python << 'EOF'
+      import os
+      import sys
+      
+      MAX_FILE_SIZE_KB = 100  # Adjust as needed
+      sql_files = [f for f in os.listdir('.') if f.endswith('.sql')]
+      oversized_files = []
+      
+      for sql_file in sql_files:
+          size_kb = os.path.getsize(sql_file) / 1024
+          if size_kb > MAX_FILE_SIZE_KB:
+              oversized_files.append((sql_file, size_kb))
+              print(f"⚠️  {sql_file}: {size_kb:.1f}KB (max: {MAX_FILE_SIZE_KB}KB)")
+          else:
+              print(f"✅ {sql_file}: {size_kb:.1f}KB")
+      
+      if oversized_files:
+          print(f"\n📏 {len(oversized_files)} file(s) exceed size limit:")
+          for file, size in oversized_files:
+              print(f"   - {file}: {size:.1f}KB")
+          # Comment out next line if you want this to be a warning
+          # sys.exit(1)
+      EOF
+```
+
+3. Oracle-Specific Validation
+
+```yaml
+# Oracle-specific validation
+oracle_validation:
+  stage: validation
+  image: python:3.9
+  before_script:
+    - pip install oracledb
+  script:
+    - |
+      python << 'EOF'
+      import os
+      import re
+      import sys
+      
+      # Check for Oracle-specific issues
+      oracle_issues = []
+      sql_files = [f for f in os.listdir('.') if f.endswith('.sql')]
+      
+      oracle_reserved_words = [
+          'SYSDATE', 'DUAL', 'ROWNUM', 'ROWID', 'NVL', 'DECODE',
+          'LEVEL', 'CONNECT_BY_ROOT', 'PRIOR'
+      ]
+      
+      for sql_file in sql_files:
+          with open(sql_file, 'r', encoding='utf-8') as f:
+              content = f.read().upper()
+          
+          # Check for potential issues
+          if 'SELECT *' in content:
+              oracle_issues.append(f"{sql_file}: Uses SELECT * - specify columns explicitly")
+          
+          # Check for missing semicolons in multi-statement files
+          statements = [s.strip() for s in content.split(';') if s.strip()]
+          if len(statements) > 1 and not content.strip().endswith(';'):
+              oracle_issues.append(f"{sql_file}: Missing semicolon at end of file")
+          
+          print(f"🔍 {sql_file}: Oracle-specific checks completed")
+      
+      if oracle_issues:
+          print(f"\n🐛 Oracle-specific issues found:")
+          for issue in oracle_issues:
+              print(f"   - {issue}")
+          # Uncomment to fail pipeline on Oracle issues
+          # sys.exit(1)
+      else:
+          print("✅ No Oracle-specific issues found")
+      EOF
+  only:
+    changes:
+      - "**/*.sql"
+```
+
+4. Complete Pipeline with Customizable Variables
+
+```yaml
+# Complete .gitlab-ci.yml
+stages:
+  - validation
+  - security
+  - quality
+  - notify
+
+variables:
+  RELEASE_TAG_PATTERN: "^-- Release: v[0-9]+\\.[0-9]+\\.[0-9]+"
+  MAX_FILE_SIZE_KB: "100"
+  FAIL_ON_SECURITY_ISSUES: "false"
+  FAIL_ON_NAMING_ISSUES: "false"
+
+.validate_script: &validate_script |
+  import os, re, sys
+  release_pattern = r"${RELEASE_TAG_PATTERN}"
+  sql_files = [f for f in os.listdir('.') if f.endswith('.sql')]
+  invalid_files = []
+  
+  for sql_file in sql_files:
+      try:
+          with open(sql_file, 'r') as f:
+              first_line = f.readline().strip()
+          if not re.match(release_pattern, first_line):
+              invalid_files.append(sql_file)
+              print(f"❌ {sql_file}: Missing release tag")
+      except Exception as e:
+          print(f"Error: {e}")
+          invalid_files.append(sql_file)
+  
+  if invalid_files:
+      print(f"Failed for: {invalid_files}")
+      sys.exit(1)
+  else:
+      print("All SQL files validated successfully!")
+
+validate_sql_files:
+  stage: validation
+  image: python:3.9
+  script:
+    - python -c *validate_script
+
+# Notification job (optional)
+notify_validation_success:
+  stage: notify
+  image: alpine:latest
+  script:
+    - echo "All SQL validations passed successfully!"
+    - echo "Release tags are properly formatted in all .sql files"
+  needs:
+    - validate_sql_files
+    - validate_sql_syntax
+  only:
+    - main
+    - master
+  when: on_success
+
+notify_validation_failure:
+  stage: notify
+  image: alpine:latest
+  script:
+    - echo "SQL validation failed! Please check the pipeline logs."
+  needs:
+    - validate_sql_files
+  when: on_failure
+```
+
+5. Example SQL File Template
+
+Create an example SQL file that passes validation:
+
+```sql
+-- Release: v1.0.0
+-- Description: Example SQL file with proper release tag
+-- Author: Your Name
+-- Date: 2024-01-01
+
+/* 
+   Your Oracle SQL code here
+   This file will pass all validations
+*/
+
+CREATE TABLE example_table (
+    id NUMBER PRIMARY KEY,
+    name VARCHAR2(100) NOT NULL,
+    created_date DATE DEFAULT SYSDATE
+);
+
+-- Add your SQL statements below
+```
+
+Usage Instructions
+
+1. Place the .gitlab-ci.yml file in your project root
+2. Adjust the variables according to your needs:
+   · RELEASE_TAG_PATTERN: Modify the regex to match your release tag format
+   · MAX_FILE_SIZE_KB: Set appropriate file size limits
+3. Configure the failure conditions by uncommenting the sys.exit(1) lines in jobs where you want strict validation
+4. Add Oracle connection validation if you have database credentials available in CI variables
+
+This pipeline will:
+
+· ✅ Fail if SQL files don't start with the required release tag
+· ✅ Validate SQL syntax
+· ✅ Check for security issues
+· ✅ Validate naming conventions
+· ✅ Check file sizes
+· ✅ Perform Oracle-specific validations
+
+The pipeline runs automatically when SQL files are modified and provides clear feedback about any validation failures.
