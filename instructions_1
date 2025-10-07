@@ -1,0 +1,178 @@
+Only new and changed files should be validated in the pipeline. Existing files without modifications should NOT be forced to comply with the new rules.
+
+Here's why:
+
+The Correct Approach
+
+```yaml
+stages:
+  - validation
+
+variables:
+  RELEASE_TAG_PATTERN: "^-- Release: v[0-9]+\\.[0-9]+\\.[0-9]+"
+
+validate_changed_sql_files:
+  stage: validation
+  image: python:3.9
+  before_script:
+    - pip install sqlparse
+  script:
+    - |
+      python << 'EOF'
+      import os
+      import re
+      import sys
+      import sqlparse
+      import subprocess
+      
+      FILENAME_PATTERN = r'^[a-z][a-z0-9_]*\.sql$'
+      release_pattern = r"^-- Release: v\d+\.\d+\.\d+"
+      
+      def get_changed_and_new_files():
+          """Get only newly added or modified SQL files"""
+          try:
+              # Get files that are added (A) or modified (M)
+              result = subprocess.run([
+                  'git', 'diff', '--name-only', '--diff-filter=AM',
+                  os.environ.get('CI_MERGE_REQUEST_TARGET_BRANCH_NAME', 'main') + '...HEAD'
+              ], capture_output=True, text=True, check=True)
+              
+              changed_files = result.stdout.strip().split('\n')
+              return [f for f in changed_files if f and f.endswith('.sql')]
+              
+          except Exception as e:
+              print(f"Error getting changed files: {e}")
+              # Fallback: check what's in the current commit
+              result = subprocess.run([
+                  'git', 'diff', '--name-only', '--diff-filter=AM', 'HEAD~1', 'HEAD'
+              ], capture_output=True, text=True)
+              changed_files = result.stdout.strip().split('\n')
+              return [f for f in changed_files if f and f.endswith('.sql')]
+      
+      # Main execution
+      files_to_validate = get_changed_and_new_files()
+      
+      if not files_to_validate:
+          print("✅ No new or modified SQL files in this commit/merge request")
+          sys.exit(0)
+      
+      print(f"🔍 Validating {len(files_to_validate)} new/changed SQL file(s):")
+      for file in files_to_validate:
+          print(f"   - {file}")
+      print()
+      
+      validation_errors = []
+      for sql_file in files_to_validate:
+          if not os.path.exists(sql_file):
+              print(f"⚠️  File {sql_file} not found, skipping")
+              continue
+              
+          print(f"📄 Validating: {sql_file}")
+          file_errors = []
+          
+          # 1. Release tag validation
+          try:
+              with open(sql_file, 'r', encoding='utf-8') as f:
+                  first_line = f.readline().strip()
+              
+              if not re.match(release_pattern, first_line):
+                  file_errors.append(f"Missing or invalid release tag. First line: '{first_line}'")
+                  print(f"   ❌ Release tag: Invalid")
+              else:
+                  print(f"   ✅ Release tag: {first_line}")
+          except Exception as e:
+              file_errors.append(f"Error reading file: {e}")
+          
+          # 2. Filename convention
+          filename = os.path.basename(sql_file)
+          if not re.match(FILENAME_PATTERN, filename, re.IGNORECASE):
+              file_errors.append(f"Filename doesn't match pattern: {FILENAME_PATTERN}")
+              print(f"   ❌ Filename convention: Invalid")
+          else:
+              print(f"   ✅ Filename convention: OK")
+          
+          # 3. SQL syntax
+          try:
+              with open(sql_file, 'r', encoding='utf-8') as f:
+                  content = f.read()
+              
+              if content.strip():
+                  parsed = sqlparse.parse(content)
+                  if not parsed:
+                      file_errors.append("Invalid SQL syntax - cannot parse")
+                      print(f"   ❌ SQL syntax: Invalid")
+                  else:
+                      print(f"   ✅ SQL syntax: OK")
+              else:
+                  print(f"   ⚠️  SQL syntax: Empty file")
+                  
+          except Exception as e:
+              file_errors.append(f"SQL syntax error: {str(e)}")
+              print(f"   ❌ SQL syntax: Error")
+          
+          if file_errors:
+              validation_errors.append({
+                  'file': sql_file,
+                  'errors': file_errors
+              })
+          print()
+      
+      # Summary
+      if validation_errors:
+          print("🚫 VALIDATION FAILED FOR NEW/CHANGED FILES")
+          print("=" * 50)
+          for error_info in validation_errors:
+              print(f"\n📁 {error_info['file']}")
+              for error in error_info['errors']:
+                  print(f"   ❌ {error}")
+          
+          print(f"\n❌ {len(validation_errors)} new/changed file(s) failed validation")
+          print("💡 Note: Only new and modified files are validated. Existing files are not checked.")
+          sys.exit(1)
+      else:
+          print("🎉 ALL NEW/CHANGED SQL FILES VALIDATED SUCCESSFULLY!")
+          print(f"✅ {len(files_to_validate)} file(s) comply with the new standards")
+          print("💡 Existing files without modifications are not validated.")
+      EOF
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+```
+
+Why Only New/Changed Files?
+
+1. Practical Reality: You can't force all existing files to immediately comply with new standards
+2. Gradual Migration: Allows you to fix old files gradually over time
+3. No Breaking Changes: Doesn't block deployments because of legacy code
+4. Team Adoption: Gives teams time to adapt to new standards
+
+What Gets Validated:
+
+File Type Validated? Reason
+New SQL files added in MR/commit ✅ YES Must follow new standards
+Modified SQL files in MR/commit ✅ YES Changes should follow standards
+Existing SQL files (no changes) ❌ NO Legacy code, gradual migration
+Deleted SQL files ❌ NO No need to validate
+
+Example Scenarios:
+
+Scenario 1: You add a new file new_feature.sql
+
+· ✅ Pipeline validates it has release tag, proper name, valid syntax
+
+Scenario 2: You modify an old file legacy_script.sql (that has no release tag)
+
+· ✅ Pipeline requires the modified file to now have release tag
+
+Scenario 3: Existing file old_procedure.sql (no release tag, no changes)
+
+· ❌ Pipeline ignores it completely
+
+Benefits:
+
+· Backward Compatible: Existing workflows aren't broken
+· Incremental Improvement: Codebase quality improves over time
+· Practical Enforcement: Teams can adopt standards gradually
+· No Surprise Failures: Pipeline won't fail due to untouched legacy code
+
+This approach follows the industry best practice of applying new standards only to new and modified code, while allowing legacy code to be updated gradually.
