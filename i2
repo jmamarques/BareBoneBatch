@@ -1,0 +1,396 @@
+I see the message got cut off. Let me provide you with the complete Option 1 implementation - the custom DAO-based ItemReader that will properly handle pagination with Oracle:
+
+🏆 Complete Option 1 Implementation
+
+1. ImportLine Entity
+
+```java
+public class ImportLine {
+    private Long id;
+    private String recordId;
+    private String dataField1;
+    private String dataField2;
+    private BigDecimal amount;
+    private LocalDateTime transactionDate;
+    private String status;
+    
+    // constructors, getters, setters
+    public ImportLine() {}
+    
+    public ImportLine(Long id, String recordId, String dataField1, String dataField2, 
+                     BigDecimal amount, LocalDateTime transactionDate, String status) {
+        this.id = id;
+        this.recordId = recordId;
+        this.dataField1 = dataField1;
+        this.dataField2 = dataField2;
+        this.amount = amount;
+        this.transactionDate = transactionDate;
+        this.status = status;
+    }
+    
+    // getters and setters...
+}
+```
+
+2. MyBatis Mapper Interface
+
+```java
+@Mapper
+public interface ImportLineMapper {
+    
+    /**
+     * Fetch records with pagination using Oracle ROW_NUMBER()
+     */
+    List<ImportLine> findWithPagination(Map<String, Object> params);
+    
+    /**
+     * Count total records for the query
+     */
+    int countImportLines(Map<String, Object> params);
+    
+    /**
+     * Alternative: Using OFFSET/FETCH (Oracle 12c+)
+     */
+    List<ImportLine> findWithPaginationOffset(Map<String, Object> params);
+}
+```
+
+3. Mapper XML with Oracle Pagination
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.mapper.ImportLineMapper">
+    
+    <!-- Method 1: Using ROW_NUMBER() (Works on all Oracle versions) -->
+    <select id="findWithPagination" parameterType="map" resultType="ImportLine">
+        SELECT *
+        FROM (
+            SELECT 
+                id, record_id, data_field1, data_field2, 
+                amount, transaction_date, status,
+                ROW_NUMBER() OVER (ORDER BY id) AS rn
+            FROM import_table 
+            WHERE 1=1
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="startDate != null">
+                AND transaction_date >= #{startDate}
+            </if>
+            <if test="endDate != null">
+                AND transaction_date &lt;= #{endDate}
+            </if>
+        )
+        WHERE rn > #{offset} AND rn &lt;= #{offset} + #{limit}
+        ORDER BY rn
+    </select>
+    
+    <!-- Method 2: Using OFFSET/FETCH (Oracle 12c+ - More efficient) -->
+    <select id="findWithPaginationOffset" parameterType="map" resultType="ImportLine">
+        SELECT 
+            id, record_id, data_field1, data_field2, 
+            amount, transaction_date, status
+        FROM import_table 
+        WHERE 1=1
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="startDate != null">
+            AND transaction_date >= #{startDate}
+        </if>
+        <if test="endDate != null">
+            AND transaction_date &lt;= #{endDate}
+        </if>
+        ORDER BY id
+        OFFSET #{offset} ROWS FETCH NEXT #{limit} ROWS ONLY
+    </select>
+    
+    <select id="countImportLines" parameterType="map" resultType="int">
+        SELECT COUNT(*)
+        FROM import_table 
+        WHERE 1=1
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="startDate != null">
+            AND transaction_date >= #{startDate}
+        </if>
+        <if test="endDate != null">
+            AND transaction_date &lt;= #{endDate}
+        </if>
+    </select>
+</mapper>
+```
+
+4. Repository Class
+
+```java
+@Repository
+public class ImportLineRepository {
+    
+    @Autowired
+    private ImportLineMapper importLineMapper;
+    
+    /**
+     * Fetch paginated results
+     */
+    public List<ImportLine> findWithPagination(int offset, int limit, Map<String, Object> parameters) {
+        Map<String, Object> params = new HashMap<>(parameters);
+        params.put("offset", offset);
+        params.put("limit", limit);
+        
+        // Use OFFSET/FETCH for Oracle 12c+, fallback to ROW_NUMBER() for older versions
+        try {
+            return importLineMapper.findWithPaginationOffset(params);
+        } catch (Exception e) {
+            // Fallback to ROW_NUMBER method if OFFSET/FETCH not supported
+            return importLineMapper.findWithPagination(params);
+        }
+    }
+    
+    /**
+     * Count total records matching criteria
+     */
+    public int countImportLines(Map<String, Object> parameters) {
+        return importLineMapper.countImportLines(parameters);
+    }
+    
+    /**
+     * Get distinct status values for filtering
+     */
+    public List<String> findDistinctStatus() {
+        return importLineMapper.findDistinctStatus();
+    }
+}
+```
+
+5. Custom DAO-Based ItemReader (Core Solution)
+
+```java
+@Component
+@StepScope
+public class DaoItemReader implements ItemReader<ImportLine> {
+    
+    private final ImportLineRepository repository;
+    private final Map<String, Object> parameters;
+    private final int pageSize;
+    
+    private int currentPage = 0;
+    private List<ImportLine> currentPageItems;
+    private int currentIndex = 0;
+    private boolean initialized = false;
+    private long totalRecords = 0;
+    
+    public DaoItemReader(ImportLineRepository repository,
+                        @Value("#{jobParameters}") Map<String, Object> jobParameters,
+                        @Value("#{jobParameters['pageSize']}") Integer pageSize) {
+        this.repository = repository;
+        this.parameters = new HashMap<>(jobParameters);
+        this.pageSize = pageSize != null ? pageSize : 1000; // Default page size
+        
+        // Remove Spring Batch specific parameters that might conflict
+        this.parameters.remove("jobInstanceId");
+        this.parameters.remove("jobExecutionId");
+    }
+    
+    @PostConstruct
+    public void init() {
+        System.out.println("Initializing DaoItemReader with pageSize: " + pageSize);
+        System.out.println("Parameters: " + parameters);
+    }
+    
+    @Override
+    public ImportLine read() throws Exception {
+        if (!initialized) {
+            initialize();
+        }
+        
+        // Check if we need to load the next page
+        if (currentPageItems == null || currentIndex >= currentPageItems.size()) {
+            currentPageItems = loadNextPage();
+            currentIndex = 0;
+            
+            if (currentPageItems == null || currentPageItems.isEmpty()) {
+                System.out.println("No more data to read. Total pages processed: " + currentPage);
+                return null; // No more data
+            }
+        }
+        
+        // Get the next item from current page
+        ImportLine item = currentPageItems.get(currentIndex);
+        currentIndex++;
+        
+        // Log progress every 1000 records
+        long currentRecord = (currentPage - 1) * pageSize + currentIndex;
+        if (currentRecord % 1000 == 0) {
+            logProgress(currentRecord);
+        }
+        
+        return item;
+    }
+    
+    private void initialize() {
+        currentPage = 0;
+        currentIndex = 0;
+        currentPageItems = null;
+        initialized = true;
+        
+        // Get total count for progress tracking
+        try {
+            totalRecords = repository.countImportLines(parameters);
+            System.out.println("Total records to process: " + totalRecords);
+        } catch (Exception e) {
+            System.out.println("Could not get total record count: " + e.getMessage());
+            totalRecords = 0;
+        }
+    }
+    
+    private List<ImportLine> loadNextPage() {
+        int offset = currentPage * pageSize;
+        
+        try {
+            List<ImportLine> items = repository.findWithPagination(offset, pageSize, parameters);
+            currentPage++;
+            
+            if (items != null && !items.isEmpty()) {
+                System.out.printf("Loaded page %d: %d items (offset: %d, limit: %d)%n", 
+                    currentPage, items.size(), offset, pageSize);
+            } else {
+                System.out.println("No items found for page " + currentPage);
+            }
+            
+            return items != null ? items : Collections.emptyList();
+            
+        } catch (Exception e) {
+            System.err.printf("Error loading page %d (offset: %d): %s%n", 
+                currentPage, offset, e.getMessage());
+            throw new RuntimeException("Failed to load page " + currentPage, e);
+        }
+    }
+    
+    private void logProgress(long currentRecord) {
+        if (totalRecords > 0) {
+            double progress = (double) currentRecord / totalRecords * 100;
+            System.out.printf("Progress: %d/%d (%.2f%%)%n", 
+                currentRecord, totalRecords, progress);
+        } else {
+            System.out.println("Processed records: " + currentRecord);
+        }
+    }
+    
+    @PreDestroy
+    public void cleanup() {
+        System.out.println("Cleaning up DaoItemReader. Final page: " + currentPage);
+        if (currentPageItems != null) {
+            currentPageItems.clear();
+            currentPageItems = null;
+        }
+    }
+}
+```
+
+6. Batch Configuration
+
+```java
+@Configuration
+@EnableBatchProcessing
+public class BatchConfig {
+    
+    @Autowired
+    private JobBuilderFactory jobBuilderFactory;
+    
+    @Autowired
+    private StepBuilderFactory stepBuilderFactory;
+    
+    @Bean
+    @StepScope
+    public DaoItemReader importLineReader(ImportLineRepository repository,
+                                         @Value("#{jobParameters}") Map<String, Object> jobParameters) {
+        // Get pageSize from job parameters or use default
+        Integer pageSize = jobParameters.get("pageSize") != null ? 
+            Integer.valueOf(jobParameters.get("pageSize").toString()) : 1000;
+            
+        return new DaoItemReader(repository, jobParameters, pageSize);
+    }
+    
+    @Bean
+    public Step processingStep(DaoItemReader importLineReader,
+                              ItemProcessor<ImportLine, ProcessResult> processor,
+                              ItemWriter<ProcessResult> writer) {
+        return stepBuilderFactory.get("processingStep")
+                .<ImportLine, ProcessResult>chunk(100) // Processing chunk size (different from page size)
+                .reader(importLineReader)
+                .processor(processor)
+                .writer(writer)
+                .faultTolerant()
+                .skipLimit(100)
+                .skip(Exception.class)
+                .build();
+    }
+    
+    @Bean
+    public Job importJob(Step processingStep) {
+        return jobBuilderFactory.get("importJob")
+                .incrementer(new RunIdIncrementer())
+                .start(processingStep)
+                .build();
+    }
+}
+```
+
+7. Usage Example
+
+```java
+@SpringBootApplication
+public class BatchApplication implements CommandLineRunner {
+    
+    @Autowired
+    private JobLauncher jobLauncher;
+    
+    @Autowired
+    private Job importJob;
+    
+    public static void main(String[] args) {
+        SpringApplication.run(BatchApplication.class, args);
+    }
+    
+    @Override
+    public void run(String... args) throws Exception {
+        JobParameters jobParameters = new JobParametersBuilder()
+                .addString("status", "PENDING")
+                .addString("startDate", "2024-01-01T00:00:00")
+                .addLong("pageSize", 2000L) // Load 2000 records per page
+                .addLong("timestamp", System.currentTimeMillis())
+                .toJobParameters();
+        
+        JobExecution execution = jobLauncher.run(importJob, jobParameters);
+        System.out.println("Job completed with status: " + execution.getStatus());
+    }
+}
+```
+
+🔧 Key Benefits of This Approach:
+
+1. ✅ Proper Pagination: Uses Oracle-optimized pagination queries
+2. ✅ Memory Control: Only one page loaded in memory at a time
+3. ✅ Progress Tracking: Built-in progress monitoring
+4. ✅ Flexible Filtering: Easy to add custom filters via parameters
+5. ✅ Error Handling: Robust error handling and cleanup
+6. ✅ Performance: Efficient database queries with proper indexing
+
+📊 Expected Output:
+
+```
+Initializing DaoItemReader with pageSize: 1000
+Total records to process: 50000
+Loaded page 1: 1000 items (offset: 0, limit: 1000)
+Progress: 1000/50000 (2.00%)
+Loaded page 2: 1000 items (offset: 1000, limit: 1000)
+Progress: 2000/50000 (4.00%)
+...
+```
+
+This solution will properly respect your page size and prevent loading all records into memory!
